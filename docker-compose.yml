@@ -1,0 +1,128 @@
+name: itms
+services:
+    postgres:
+        image: postgres:17.9-bookworm
+        environment:
+            POSTGRES_DB: ${DB_NAME:-itms}
+            POSTGRES_USER: ${DB_USERNAME:-itms}
+            POSTGRES_PASSWORD: ${DB_PASSWORD:-itms}
+        ports:
+            - "127.0.0.1:${DB_PORT:-5432}:5432"
+        volumes:
+            - postgres-data:/var/lib/postgresql/data
+        restart: unless-stopped
+        healthcheck:
+            test:
+                ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+            interval: 5s
+            timeout: 5s
+            retries: 10
+    redis:
+        image: redis:8.2.9-alpine
+        command:
+            [
+                "redis-server",
+                "--maxmemory",
+                "128mb",
+                "--maxmemory-policy",
+                "allkeys-lru",
+            ]
+        ports:
+            - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+        restart: unless-stopped
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 5s
+            timeout: 3s
+            retries: 10
+    backend:
+        build: ./backend
+        environment:
+            DB_HOST: postgres
+            DB_PORT: 5432
+            DB_NAME: ${DB_NAME:-itms}
+            DB_USERNAME: ${DB_USERNAME:-itms}
+            DB_PASSWORD: ${DB_PASSWORD:-itms}
+            REDIS_HOST: redis
+            REDIS_PORT: 6379
+            CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+        ports:
+            - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
+        depends_on:
+            postgres:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+        restart: unless-stopped
+        healthcheck:
+            test:
+                [
+                    "CMD",
+                    "curl",
+                    "-fsS",
+                    "http://localhost:8080/actuator/health/readiness",
+                ]
+            interval: 5s
+            timeout: 3s
+            start_period: 40s
+            retries: 12
+    backend-test:
+        profiles: [test]
+        build:
+            context: ./backend
+            target: test
+        environment:
+            TEST_BASE_URL: http://backend:8080
+            DB_HOST: postgres
+            DB_PORT: 5432
+            DB_NAME: ${DB_NAME:-itms}
+            DB_USERNAME: ${DB_USERNAME:-itms}
+            DB_PASSWORD: ${DB_PASSWORD:-itms}
+        depends_on:
+            backend:
+                condition: service_healthy
+    k6:
+        profiles: [performance]
+        image: grafana/k6:1.3.0
+        volumes:
+            - ./tests/performance:/scripts:ro
+            - ./tests/performance/results:/reports
+        working_dir: /scripts
+        environment:
+            BASE_URL: http://backend:8080
+        depends_on:
+            backend:
+                condition: service_healthy
+    frontend-test:
+        profiles: [test]
+        build:
+            context: ./frontend
+            target: build
+        command: ["npm", "test"]
+    frontend:
+        depends_on:
+            backend:
+                condition: service_healthy
+        build:
+            context: ./frontend
+            args:
+                NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+        ports:
+            - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+        init: true
+        restart: unless-stopped
+        healthcheck:
+            test:
+                [
+                    "CMD",
+                    "node",
+                    "-e",
+                    "fetch('http://127.0.0.1:3000').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+                ]
+            interval: 10s
+            timeout: 5s
+            start_period: 20s
+            retries: 3
+
+volumes:
+    postgres-data:

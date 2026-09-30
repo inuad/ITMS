@@ -1,0 +1,3775 @@
+{
+	"info": {
+		"name": "ITMS | Backend APIs & 10 Requirement Cases",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"description": "Two folders only: complete Backend API catalog and ten requirement scenarios from docs/implementation-plan.md. Run only Folder 2, in order, one iteration. Setup writes unique fixtures to the main DB and retains successful data. TC10 requires the rollback_fixture.py prepare/verify steps. See tests/postman/README.md for mapping and commands."
+	},
+	"auth": {
+		"type": "noauth"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "employeeEmail",
+			"value": "somchai@example.com",
+			"type": "string"
+		},
+		{
+			"key": "otherEmployeeEmail",
+			"value": "suda@example.com",
+			"type": "string"
+		},
+		{
+			"key": "approverEmail",
+			"value": "arun@example.com",
+			"type": "string"
+		},
+		{
+			"key": "requestId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "requestVersion",
+			"value": "0",
+			"type": "string"
+		},
+		{
+			"key": "rollback_marker",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"const today = new Date(Date.now() + (7 + 24) * 60 * 60 * 1000).toISOString().slice(0, 10);",
+					"pm.variables.set(\"requiredDate\", today);",
+					"// Business identities are fixed pairs from IdentityRegistry; no password/JWT API exists."
+				]
+			}
+		}
+	],
+	"item": [
+		{
+			"name": "1. Backend APIs (all endpoints)",
+			"description": "Manual catalog: 8 business routes + 3 operational routes (health/readiness/discovery). Create/detail/actions capture requestId/requestVersion. Approve/Reject/Cancel are alternative branches: do not run this catalog sequentially. Optional list filters are disabled by default.",
+			"item": [
+				{
+					"name": "POST | Create Draft",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "equipment-requests"]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"employeeName\": \"Somchai Developer\",\n  \"employeeEmail\": \"{{employeeEmail}}\",\n  \"department\": \"Software Engineering\",\n  \"title\": \"Postman manual equipment request\",\n  \"purpose\": \"Equipment needed for software development work\",\n  \"requiredDate\": \"{{requiredDate}}\",\n  \"additionalNote\": \"Postman requirement fixture; retain for user trials\",\n  \"items\": [\n    {\n      \"equipmentType\": \"NOTEBOOK\",\n      \"quantity\": 1,\n      \"specification\": \"16 GB RAM\"\n    },\n    {\n      \"equipmentType\": \"MONITOR\",\n      \"quantity\": 2,\n      \"specification\": \"27 inch monitor\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+									"const responseBodyJson = pm.response.json();",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"requestId\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"requestVersion\", responseBodyJson.version);",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "GET | List / search / filter / pagination",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests?page=0&size=10&sort=createdAt,desc",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "equipment-requests"],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								},
+								{
+									"key": "sort",
+									"value": "createdAt,desc"
+								},
+								{
+									"key": "keyword",
+									"value": "Postman",
+									"disabled": true
+								},
+								{
+									"key": "status",
+									"value": "DRAFT",
+									"disabled": true
+								},
+								{
+									"key": "department",
+									"value": "Software Engineering",
+									"disabled": true
+								}
+							]
+						},
+						"description": ""
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "GET | Detail",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{requestId}}",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{requestId}}"
+							]
+						},
+						"description": ""
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"requestId\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"requestVersion\", responseBodyJson.version);",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "PUT | Edit Draft",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{requestId}}",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{requestId}}"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"employeeName\": \"Somchai Developer\",\n  \"employeeEmail\": \"{{employeeEmail}}\",\n  \"department\": \"Software Engineering\",\n  \"title\": \"Postman manual request updated\",\n  \"purpose\": \"Equipment needed for software development work\",\n  \"requiredDate\": \"{{requiredDate}}\",\n  \"additionalNote\": \"Postman requirement fixture; retain for user trials\",\n  \"items\": [\n    {\n      \"equipmentType\": \"NOTEBOOK\",\n      \"quantity\": 1,\n      \"specification\": \"16 GB RAM\"\n    },\n    {\n      \"equipmentType\": \"MONITOR\",\n      \"quantity\": 2,\n      \"specification\": \"27 inch monitor\"\n    }\n  ],\n  \"version\": {{requestVersion}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"requestId\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"requestVersion\", responseBodyJson.version);",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "POST | Submit Draft",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{requestId}}/submit",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{requestId}}",
+								"submit"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"version\": {{requestVersion}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"requestId\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"requestVersion\", responseBodyJson.version);",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "POST | Approve Pending",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "APPROVER"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{approverEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{requestId}}/approve",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{requestId}}",
+								"approve"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"version\": {{requestVersion}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"requestId\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"requestVersion\", responseBodyJson.version);",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "POST | Reject Pending",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "APPROVER"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{approverEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{requestId}}/reject",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{requestId}}",
+								"reject"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"version\": {{requestVersion}},\n  \"reason\": \"Equipment budget not available this month\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"requestId\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"requestVersion\", responseBodyJson.version);",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "POST | Cancel Draft or Pending",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{requestId}}/cancel",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{requestId}}",
+								"cancel"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"version\": {{requestVersion}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"requestId\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"requestVersion\", responseBodyJson.version);",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "GET | Health (DB + Redis)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/actuator/health",
+							"host": ["{{baseUrl}}"],
+							"path": ["actuator", "health"]
+						},
+						"description": ""
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"UP\", () => pm.expect(responseBodyJson.status).to.eql(\"UP\"));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "GET | Readiness (application + DB)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/actuator/health/readiness",
+							"host": ["{{baseUrl}}"],
+							"path": ["actuator", "health", "readiness"]
+						},
+						"description": ""
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"UP\", () => pm.expect(responseBodyJson.status).to.eql(\"UP\"));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "GET | Actuator endpoint discovery",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/actuator",
+							"host": ["{{baseUrl}}"],
+							"path": ["actuator"]
+						},
+						"description": "Lists the exposed health routes from Spring Boot Actuator."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"pm.test(\"Actuator discovery links\", () => pm.expect(pm.response.json()._links).to.have.property(\"health\"));"
+								]
+							}
+						}
+					],
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. Requirement tests (10 cases)",
+			"description": "TC01\u2013TC10 map exactly to the ten Backend requirement scenarios. Flat numbered substeps include setup and persisted-state assertions. Run in order, one iteration; do not run Folder 1. Prepare rollback fixture first and verify/cleanup afterward.",
+			"item": [
+				{
+					"name": "TC01.1 | Create fresh Draft",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "equipment-requests"]
+						},
+						"description": "Setup for this logical case. Creates a new fixture; never uses an existing demo request.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"employeeName\": \"Somchai Developer\",\n  \"employeeEmail\": \"{{employeeEmail}}\",\n  \"department\": \"Software Engineering\",\n  \"title\": \"{{tc01_marker}}\",\n  \"purpose\": \"Equipment needed for software development work\",\n  \"requiredDate\": \"{{requiredDate}}\",\n  \"additionalNote\": \"Postman requirement fixture; retain for user trials\",\n  \"items\": [\n    {\n      \"equipmentType\": \"NOTEBOOK\",\n      \"quantity\": 1,\n      \"specification\": \"16 GB RAM\"\n    },\n    {\n      \"equipmentType\": \"MONITOR\",\n      \"quantity\": 2,\n      \"specification\": \"27 inch monitor\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set(\"tc01_marker\", \"postman_tc01_\" + pm.variables.replaceIn(\"{{$guid}}\"));"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"DRAFT, version 0\", () => {",
+									"    pm.expect(responseBodyJson.status).to.eql(\"DRAFT\");",
+									"    pm.expect(responseBodyJson.version).to.eql(0);",
+									"    pm.expect(responseBodyJson.employeeEmail).to.eql(pm.variables.get(\"employeeEmail\"));",
+									"});",
+									"pm.test(\"totalItems sums quantity\", () => pm.expect(responseBodyJson.totalItems).to.eql(3));",
+									"pm.test(\"Generated identifiers and item details\", () => {",
+									"    const submittedInput = JSON.parse(pm.variables.replaceIn(pm.request.body.raw));",
+									"    Object.keys(submittedInput).filter(key => key !== \"items\").forEach(key => pm.expect(responseBodyJson[key]).to.eql(submittedInput[key]));",
+									"    pm.expect(responseBodyJson.items.map(({equipmentType, quantity, specification}) => ({equipmentType, quantity, specification}))).to.eql(submittedInput.items);",
+									"    pm.expect(responseBodyJson.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);",
+									"    pm.expect(responseBodyJson.requestNumber).to.match(/^REQ-\\d{4}-\\d+$/);",
+									"    pm.expect(responseBodyJson.rejectionReason).to.eql(null);",
+									"    responseBodyJson.items.forEach(item => pm.expect(item.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+									"});",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"tc01_id\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"tc01_version\", responseBodyJson.version);",
+									"    pm.collectionVariables.set(\"tc01_snapshot\", JSON.stringify(responseBodyJson));",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC01.2 | Verify persisted detail",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc01_id}}",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc01_id}}"
+							]
+						},
+						"description": ""
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Failed action preserved the full aggregate\", () => {",
+									"    pm.expect(responseBodyJson).to.eql(JSON.parse(pm.collectionVariables.get(\"tc01_snapshot\")));",
+									"});"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC01.3 | Reject invalid quantity 0",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "equipment-requests"]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"employeeName\": \"Somchai Developer\",\n  \"employeeEmail\": \"{{employeeEmail}}\",\n  \"department\": \"Software Engineering\",\n  \"title\": \"Invalid quantity\",\n  \"purpose\": \"Equipment needed for software development work\",\n  \"requiredDate\": \"{{requiredDate}}\",\n  \"additionalNote\": \"Postman requirement fixture; retain for user trials\",\n  \"items\": [\n    {\n      \"equipmentType\": \"MONITOR\",\n      \"quantity\": 0\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Unified error contract\", () => {",
+									"    pm.expect(Object.keys(responseBodyJson).sort()).to.eql([\"timestamp\", \"status\", \"code\", \"message\", \"path\", \"fieldErrors\"].sort());",
+									"    pm.expect(responseBodyJson.status).to.eql(pm.response.code);",
+									"    pm.expect(responseBodyJson.message).to.be.a(\"string\").and.not.empty;",
+									"    pm.expect(Number.isNaN(Date.parse(responseBodyJson.timestamp))).to.eql(false);",
+									"    pm.expect(responseBodyJson.path).to.eql(pm.request.url.getPath());",
+									"    pm.expect(responseBodyJson.fieldErrors).to.be.an(\"object\");",
+									"});",
+									"pm.test(\"VALIDATION_ERROR\", () => pm.expect(responseBodyJson.code).to.eql(\"VALIDATION_ERROR\"));",
+									"pm.test(\"fieldErrors: items.0.quantity\", () => pm.expect(responseBodyJson.fieldErrors).to.have.property(\"items.0.quantity\"));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC01.4 | Reject invalid quantity 6",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "equipment-requests"]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"employeeName\": \"Somchai Developer\",\n  \"employeeEmail\": \"{{employeeEmail}}\",\n  \"department\": \"Software Engineering\",\n  \"title\": \"Invalid quantity\",\n  \"purpose\": \"Equipment needed for software development work\",\n  \"requiredDate\": \"{{requiredDate}}\",\n  \"additionalNote\": \"Postman requirement fixture; retain for user trials\",\n  \"items\": [\n    {\n      \"equipmentType\": \"MONITOR\",\n      \"quantity\": 6\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Unified error contract\", () => {",
+									"    pm.expect(Object.keys(responseBodyJson).sort()).to.eql([\"timestamp\", \"status\", \"code\", \"message\", \"path\", \"fieldErrors\"].sort());",
+									"    pm.expect(responseBodyJson.status).to.eql(pm.response.code);",
+									"    pm.expect(responseBodyJson.message).to.be.a(\"string\").and.not.empty;",
+									"    pm.expect(Number.isNaN(Date.parse(responseBodyJson.timestamp))).to.eql(false);",
+									"    pm.expect(responseBodyJson.path).to.eql(pm.request.url.getPath());",
+									"    pm.expect(responseBodyJson.fieldErrors).to.be.an(\"object\");",
+									"});",
+									"pm.test(\"VALIDATION_ERROR\", () => pm.expect(responseBodyJson.code).to.eql(\"VALIDATION_ERROR\"));",
+									"pm.test(\"fieldErrors: items.0.quantity\", () => pm.expect(responseBodyJson.fieldErrors).to.have.property(\"items.0.quantity\"));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC02.1 | Create fresh Draft",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "equipment-requests"]
+						},
+						"description": "Setup for this logical case. Creates a new fixture; never uses an existing demo request.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"employeeName\": \"Somchai Developer\",\n  \"employeeEmail\": \"{{employeeEmail}}\",\n  \"department\": \"Software Engineering\",\n  \"title\": \"{{tc02_marker}}\",\n  \"purpose\": \"Equipment needed for software development work\",\n  \"requiredDate\": \"{{requiredDate}}\",\n  \"additionalNote\": \"Postman requirement fixture; retain for user trials\",\n  \"items\": []\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set(\"tc02_marker\", \"postman_tc02_\" + pm.variables.replaceIn(\"{{$guid}}\"));"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"DRAFT, version 0\", () => {",
+									"    pm.expect(responseBodyJson.status).to.eql(\"DRAFT\");",
+									"    pm.expect(responseBodyJson.version).to.eql(0);",
+									"    pm.expect(responseBodyJson.employeeEmail).to.eql(pm.variables.get(\"employeeEmail\"));",
+									"});",
+									"pm.test(\"totalItems sums quantity\", () => pm.expect(responseBodyJson.totalItems).to.eql(0));",
+									"pm.test(\"Generated identifiers and item details\", () => {",
+									"    const submittedInput = JSON.parse(pm.variables.replaceIn(pm.request.body.raw));",
+									"    Object.keys(submittedInput).filter(key => key !== \"items\").forEach(key => pm.expect(responseBodyJson[key]).to.eql(submittedInput[key]));",
+									"    pm.expect(responseBodyJson.items.map(({equipmentType, quantity, specification}) => ({equipmentType, quantity, specification}))).to.eql(submittedInput.items);",
+									"    pm.expect(responseBodyJson.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);",
+									"    pm.expect(responseBodyJson.requestNumber).to.match(/^REQ-\\d{4}-\\d+$/);",
+									"    pm.expect(responseBodyJson.rejectionReason).to.eql(null);",
+									"    responseBodyJson.items.forEach(item => pm.expect(item.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+									"});",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"tc02_id\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"tc02_version\", responseBodyJson.version);",
+									"    pm.collectionVariables.set(\"tc02_snapshot\", JSON.stringify(responseBodyJson));",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC02.2 | submit",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc02_id}}/submit",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc02_id}}",
+								"submit"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"version\": {{tc02_version}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Unified error contract\", () => {",
+									"    pm.expect(Object.keys(responseBodyJson).sort()).to.eql([\"timestamp\", \"status\", \"code\", \"message\", \"path\", \"fieldErrors\"].sort());",
+									"    pm.expect(responseBodyJson.status).to.eql(pm.response.code);",
+									"    pm.expect(responseBodyJson.message).to.be.a(\"string\").and.not.empty;",
+									"    pm.expect(Number.isNaN(Date.parse(responseBodyJson.timestamp))).to.eql(false);",
+									"    pm.expect(responseBodyJson.path).to.eql(pm.request.url.getPath());",
+									"    pm.expect(responseBodyJson.fieldErrors).to.be.an(\"object\");",
+									"});",
+									"pm.test(\"BUSINESS_RULE_VIOLATION\", () => pm.expect(responseBodyJson.code).to.eql(\"BUSINESS_RULE_VIOLATION\"));",
+									"pm.test(\"fieldErrors: items\", () => pm.expect(responseBodyJson.fieldErrors).to.have.property(\"items\"));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC02.3 | Verify persisted detail",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc02_id}}",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc02_id}}"
+							]
+						},
+						"description": ""
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Failed action preserved the full aggregate\", () => {",
+									"    pm.expect(responseBodyJson).to.eql(JSON.parse(pm.collectionVariables.get(\"tc02_snapshot\")));",
+									"});"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC03.1 | Create fresh Draft",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "equipment-requests"]
+						},
+						"description": "Setup for this logical case. Creates a new fixture; never uses an existing demo request.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"employeeName\": \"Somchai Developer\",\n  \"employeeEmail\": \"{{employeeEmail}}\",\n  \"department\": \"Software Engineering\",\n  \"title\": \"{{tc03_marker}}\",\n  \"purpose\": \"Equipment needed for software development work\",\n  \"requiredDate\": \"{{requiredDate}}\",\n  \"additionalNote\": \"Postman requirement fixture; retain for user trials\",\n  \"items\": [\n    {\n      \"equipmentType\": \"NOTEBOOK\",\n      \"quantity\": 1,\n      \"specification\": \"16 GB RAM\"\n    },\n    {\n      \"equipmentType\": \"MONITOR\",\n      \"quantity\": 2,\n      \"specification\": \"27 inch monitor\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set(\"tc03_marker\", \"postman_tc03_\" + pm.variables.replaceIn(\"{{$guid}}\"));"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"DRAFT, version 0\", () => {",
+									"    pm.expect(responseBodyJson.status).to.eql(\"DRAFT\");",
+									"    pm.expect(responseBodyJson.version).to.eql(0);",
+									"    pm.expect(responseBodyJson.employeeEmail).to.eql(pm.variables.get(\"employeeEmail\"));",
+									"});",
+									"pm.test(\"totalItems sums quantity\", () => pm.expect(responseBodyJson.totalItems).to.eql(3));",
+									"pm.test(\"Generated identifiers and item details\", () => {",
+									"    const submittedInput = JSON.parse(pm.variables.replaceIn(pm.request.body.raw));",
+									"    Object.keys(submittedInput).filter(key => key !== \"items\").forEach(key => pm.expect(responseBodyJson[key]).to.eql(submittedInput[key]));",
+									"    pm.expect(responseBodyJson.items.map(({equipmentType, quantity, specification}) => ({equipmentType, quantity, specification}))).to.eql(submittedInput.items);",
+									"    pm.expect(responseBodyJson.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);",
+									"    pm.expect(responseBodyJson.requestNumber).to.match(/^REQ-\\d{4}-\\d+$/);",
+									"    pm.expect(responseBodyJson.rejectionReason).to.eql(null);",
+									"    responseBodyJson.items.forEach(item => pm.expect(item.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+									"});",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"tc03_id\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"tc03_version\", responseBodyJson.version);",
+									"    pm.collectionVariables.set(\"tc03_snapshot\", JSON.stringify(responseBodyJson));",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC03.2 | submit",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc03_id}}/submit",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc03_id}}",
+								"submit"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"version\": {{tc03_version}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"PENDING, version 1\", () => {",
+									"    pm.expect(responseBodyJson.status).to.eql(\"PENDING\");",
+									"    pm.expect(responseBodyJson.version).to.eql(1);",
+									"    pm.expect(responseBodyJson.employeeEmail).to.eql(pm.variables.get(\"employeeEmail\"));",
+									"});",
+									"pm.test(\"totalItems sums quantity\", () => pm.expect(responseBodyJson.totalItems).to.eql(3));",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"tc03_id\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"tc03_version\", responseBodyJson.version);",
+									"    pm.collectionVariables.set(\"tc03_snapshot\", JSON.stringify(responseBodyJson));",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC03.3 | Verify persisted detail",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc03_id}}",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc03_id}}"
+							]
+						},
+						"description": ""
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Failed action preserved the full aggregate\", () => {",
+									"    pm.expect(responseBodyJson).to.eql(JSON.parse(pm.collectionVariables.get(\"tc03_snapshot\")));",
+									"});"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC03.4 | approve",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "APPROVER"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{approverEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc03_id}}/approve",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc03_id}}",
+								"approve"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"version\": {{tc03_version}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"APPROVED, version 2\", () => {",
+									"    pm.expect(responseBodyJson.status).to.eql(\"APPROVED\");",
+									"    pm.expect(responseBodyJson.version).to.eql(2);",
+									"    pm.expect(responseBodyJson.employeeEmail).to.eql(pm.variables.get(\"employeeEmail\"));",
+									"});",
+									"pm.test(\"totalItems sums quantity\", () => pm.expect(responseBodyJson.totalItems).to.eql(3));",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"tc03_id\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"tc03_version\", responseBodyJson.version);",
+									"    pm.collectionVariables.set(\"tc03_snapshot\", JSON.stringify(responseBodyJson));",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC03.5 | Verify persisted detail",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc03_id}}",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc03_id}}"
+							]
+						},
+						"description": ""
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Failed action preserved the full aggregate\", () => {",
+									"    pm.expect(responseBodyJson).to.eql(JSON.parse(pm.collectionVariables.get(\"tc03_snapshot\")));",
+									"});"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC04.1 | Create fresh Draft",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "equipment-requests"]
+						},
+						"description": "Setup for this logical case. Creates a new fixture; never uses an existing demo request.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"employeeName\": \"Somchai Developer\",\n  \"employeeEmail\": \"{{employeeEmail}}\",\n  \"department\": \"Software Engineering\",\n  \"title\": \"{{tc04_marker}}\",\n  \"purpose\": \"Equipment needed for software development work\",\n  \"requiredDate\": \"{{requiredDate}}\",\n  \"additionalNote\": \"Postman requirement fixture; retain for user trials\",\n  \"items\": [\n    {\n      \"equipmentType\": \"NOTEBOOK\",\n      \"quantity\": 1,\n      \"specification\": \"16 GB RAM\"\n    },\n    {\n      \"equipmentType\": \"MONITOR\",\n      \"quantity\": 2,\n      \"specification\": \"27 inch monitor\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set(\"tc04_marker\", \"postman_tc04_\" + pm.variables.replaceIn(\"{{$guid}}\"));"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"DRAFT, version 0\", () => {",
+									"    pm.expect(responseBodyJson.status).to.eql(\"DRAFT\");",
+									"    pm.expect(responseBodyJson.version).to.eql(0);",
+									"    pm.expect(responseBodyJson.employeeEmail).to.eql(pm.variables.get(\"employeeEmail\"));",
+									"});",
+									"pm.test(\"totalItems sums quantity\", () => pm.expect(responseBodyJson.totalItems).to.eql(3));",
+									"pm.test(\"Generated identifiers and item details\", () => {",
+									"    const submittedInput = JSON.parse(pm.variables.replaceIn(pm.request.body.raw));",
+									"    Object.keys(submittedInput).filter(key => key !== \"items\").forEach(key => pm.expect(responseBodyJson[key]).to.eql(submittedInput[key]));",
+									"    pm.expect(responseBodyJson.items.map(({equipmentType, quantity, specification}) => ({equipmentType, quantity, specification}))).to.eql(submittedInput.items);",
+									"    pm.expect(responseBodyJson.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);",
+									"    pm.expect(responseBodyJson.requestNumber).to.match(/^REQ-\\d{4}-\\d+$/);",
+									"    pm.expect(responseBodyJson.rejectionReason).to.eql(null);",
+									"    responseBodyJson.items.forEach(item => pm.expect(item.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+									"});",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"tc04_id\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"tc04_version\", responseBodyJson.version);",
+									"    pm.collectionVariables.set(\"tc04_snapshot\", JSON.stringify(responseBodyJson));",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC04.2 | approve",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "APPROVER"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{approverEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc04_id}}/approve",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc04_id}}",
+								"approve"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"version\": {{tc04_version}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Unified error contract\", () => {",
+									"    pm.expect(Object.keys(responseBodyJson).sort()).to.eql([\"timestamp\", \"status\", \"code\", \"message\", \"path\", \"fieldErrors\"].sort());",
+									"    pm.expect(responseBodyJson.status).to.eql(pm.response.code);",
+									"    pm.expect(responseBodyJson.message).to.be.a(\"string\").and.not.empty;",
+									"    pm.expect(Number.isNaN(Date.parse(responseBodyJson.timestamp))).to.eql(false);",
+									"    pm.expect(responseBodyJson.path).to.eql(pm.request.url.getPath());",
+									"    pm.expect(responseBodyJson.fieldErrors).to.be.an(\"object\");",
+									"});",
+									"pm.test(\"REQUEST_STATE_CONFLICT\", () => pm.expect(responseBodyJson.code).to.eql(\"REQUEST_STATE_CONFLICT\"));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC04.3 | Verify persisted detail",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc04_id}}",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc04_id}}"
+							]
+						},
+						"description": ""
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Failed action preserved the full aggregate\", () => {",
+									"    pm.expect(responseBodyJson).to.eql(JSON.parse(pm.collectionVariables.get(\"tc04_snapshot\")));",
+									"});"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC05.1 | Create fresh Draft",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "equipment-requests"]
+						},
+						"description": "Setup for this logical case. Creates a new fixture; never uses an existing demo request.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"employeeName\": \"Somchai Developer\",\n  \"employeeEmail\": \"{{employeeEmail}}\",\n  \"department\": \"Software Engineering\",\n  \"title\": \"{{tc05_marker}}\",\n  \"purpose\": \"Equipment needed for software development work\",\n  \"requiredDate\": \"{{requiredDate}}\",\n  \"additionalNote\": \"Postman requirement fixture; retain for user trials\",\n  \"items\": [\n    {\n      \"equipmentType\": \"NOTEBOOK\",\n      \"quantity\": 1,\n      \"specification\": \"16 GB RAM\"\n    },\n    {\n      \"equipmentType\": \"MONITOR\",\n      \"quantity\": 2,\n      \"specification\": \"27 inch monitor\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set(\"tc05_marker\", \"postman_tc05_\" + pm.variables.replaceIn(\"{{$guid}}\"));"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"DRAFT, version 0\", () => {",
+									"    pm.expect(responseBodyJson.status).to.eql(\"DRAFT\");",
+									"    pm.expect(responseBodyJson.version).to.eql(0);",
+									"    pm.expect(responseBodyJson.employeeEmail).to.eql(pm.variables.get(\"employeeEmail\"));",
+									"});",
+									"pm.test(\"totalItems sums quantity\", () => pm.expect(responseBodyJson.totalItems).to.eql(3));",
+									"pm.test(\"Generated identifiers and item details\", () => {",
+									"    const submittedInput = JSON.parse(pm.variables.replaceIn(pm.request.body.raw));",
+									"    Object.keys(submittedInput).filter(key => key !== \"items\").forEach(key => pm.expect(responseBodyJson[key]).to.eql(submittedInput[key]));",
+									"    pm.expect(responseBodyJson.items.map(({equipmentType, quantity, specification}) => ({equipmentType, quantity, specification}))).to.eql(submittedInput.items);",
+									"    pm.expect(responseBodyJson.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);",
+									"    pm.expect(responseBodyJson.requestNumber).to.match(/^REQ-\\d{4}-\\d+$/);",
+									"    pm.expect(responseBodyJson.rejectionReason).to.eql(null);",
+									"    responseBodyJson.items.forEach(item => pm.expect(item.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+									"});",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"tc05_id\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"tc05_version\", responseBodyJson.version);",
+									"    pm.collectionVariables.set(\"tc05_snapshot\", JSON.stringify(responseBodyJson));",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC05.2 | submit",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc05_id}}/submit",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc05_id}}",
+								"submit"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"version\": {{tc05_version}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"PENDING, version 1\", () => {",
+									"    pm.expect(responseBodyJson.status).to.eql(\"PENDING\");",
+									"    pm.expect(responseBodyJson.version).to.eql(1);",
+									"    pm.expect(responseBodyJson.employeeEmail).to.eql(pm.variables.get(\"employeeEmail\"));",
+									"});",
+									"pm.test(\"totalItems sums quantity\", () => pm.expect(responseBodyJson.totalItems).to.eql(3));",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"tc05_id\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"tc05_version\", responseBodyJson.version);",
+									"    pm.collectionVariables.set(\"tc05_snapshot\", JSON.stringify(responseBodyJson));",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC05.3 | reject",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "APPROVER"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{approverEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc05_id}}/reject",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc05_id}}",
+								"reject"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"version\": {{tc05_version}},\n  \"reason\": \"   \"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Unified error contract\", () => {",
+									"    pm.expect(Object.keys(responseBodyJson).sort()).to.eql([\"timestamp\", \"status\", \"code\", \"message\", \"path\", \"fieldErrors\"].sort());",
+									"    pm.expect(responseBodyJson.status).to.eql(pm.response.code);",
+									"    pm.expect(responseBodyJson.message).to.be.a(\"string\").and.not.empty;",
+									"    pm.expect(Number.isNaN(Date.parse(responseBodyJson.timestamp))).to.eql(false);",
+									"    pm.expect(responseBodyJson.path).to.eql(pm.request.url.getPath());",
+									"    pm.expect(responseBodyJson.fieldErrors).to.be.an(\"object\");",
+									"});",
+									"pm.test(\"VALIDATION_ERROR\", () => pm.expect(responseBodyJson.code).to.eql(\"VALIDATION_ERROR\"));",
+									"pm.test(\"fieldErrors: reason\", () => pm.expect(responseBodyJson.fieldErrors).to.have.property(\"reason\"));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC05.4 | Verify persisted detail",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc05_id}}",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc05_id}}"
+							]
+						},
+						"description": ""
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Failed action preserved the full aggregate\", () => {",
+									"    pm.expect(responseBodyJson).to.eql(JSON.parse(pm.collectionVariables.get(\"tc05_snapshot\")));",
+									"});"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC05.5 | reject",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "APPROVER"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{approverEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc05_id}}/reject",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc05_id}}",
+								"reject"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"version\": {{tc05_version}},\n  \"reason\": \"Budget is not available this month\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"REJECTED, version 2\", () => {",
+									"    pm.expect(responseBodyJson.status).to.eql(\"REJECTED\");",
+									"    pm.expect(responseBodyJson.version).to.eql(2);",
+									"    pm.expect(responseBodyJson.employeeEmail).to.eql(pm.variables.get(\"employeeEmail\"));",
+									"});",
+									"pm.test(\"totalItems sums quantity\", () => pm.expect(responseBodyJson.totalItems).to.eql(3));",
+									"pm.test(\"Rejection reason saved\", () => pm.expect(responseBodyJson.rejectionReason).to.eql(\"Budget is not available this month\"));",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"tc05_id\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"tc05_version\", responseBodyJson.version);",
+									"    pm.collectionVariables.set(\"tc05_snapshot\", JSON.stringify(responseBodyJson));",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC05.6 | Verify persisted detail",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc05_id}}",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc05_id}}"
+							]
+						},
+						"description": ""
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Failed action preserved the full aggregate\", () => {",
+									"    pm.expect(responseBodyJson).to.eql(JSON.parse(pm.collectionVariables.get(\"tc05_snapshot\")));",
+									"});"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC06.1 | Create fresh Draft",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "equipment-requests"]
+						},
+						"description": "Setup for this logical case. Creates a new fixture; never uses an existing demo request.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"employeeName\": \"Somchai Developer\",\n  \"employeeEmail\": \"{{employeeEmail}}\",\n  \"department\": \"Software Engineering\",\n  \"title\": \"{{tc06_marker}}\",\n  \"purpose\": \"Equipment needed for software development work\",\n  \"requiredDate\": \"{{requiredDate}}\",\n  \"additionalNote\": \"Postman requirement fixture; retain for user trials\",\n  \"items\": [\n    {\n      \"equipmentType\": \"NOTEBOOK\",\n      \"quantity\": 1,\n      \"specification\": \"16 GB RAM\"\n    },\n    {\n      \"equipmentType\": \"MONITOR\",\n      \"quantity\": 2,\n      \"specification\": \"27 inch monitor\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set(\"tc06_marker\", \"postman_tc06_\" + pm.variables.replaceIn(\"{{$guid}}\"));"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"DRAFT, version 0\", () => {",
+									"    pm.expect(responseBodyJson.status).to.eql(\"DRAFT\");",
+									"    pm.expect(responseBodyJson.version).to.eql(0);",
+									"    pm.expect(responseBodyJson.employeeEmail).to.eql(pm.variables.get(\"employeeEmail\"));",
+									"});",
+									"pm.test(\"totalItems sums quantity\", () => pm.expect(responseBodyJson.totalItems).to.eql(3));",
+									"pm.test(\"Generated identifiers and item details\", () => {",
+									"    const submittedInput = JSON.parse(pm.variables.replaceIn(pm.request.body.raw));",
+									"    Object.keys(submittedInput).filter(key => key !== \"items\").forEach(key => pm.expect(responseBodyJson[key]).to.eql(submittedInput[key]));",
+									"    pm.expect(responseBodyJson.items.map(({equipmentType, quantity, specification}) => ({equipmentType, quantity, specification}))).to.eql(submittedInput.items);",
+									"    pm.expect(responseBodyJson.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);",
+									"    pm.expect(responseBodyJson.requestNumber).to.match(/^REQ-\\d{4}-\\d+$/);",
+									"    pm.expect(responseBodyJson.rejectionReason).to.eql(null);",
+									"    responseBodyJson.items.forEach(item => pm.expect(item.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+									"});",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"tc06_id\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"tc06_version\", responseBodyJson.version);",
+									"    pm.collectionVariables.set(\"tc06_snapshot\", JSON.stringify(responseBodyJson));",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC06.2 | submit",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc06_id}}/submit",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc06_id}}",
+								"submit"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"version\": {{tc06_version}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"PENDING, version 1\", () => {",
+									"    pm.expect(responseBodyJson.status).to.eql(\"PENDING\");",
+									"    pm.expect(responseBodyJson.version).to.eql(1);",
+									"    pm.expect(responseBodyJson.employeeEmail).to.eql(pm.variables.get(\"employeeEmail\"));",
+									"});",
+									"pm.test(\"totalItems sums quantity\", () => pm.expect(responseBodyJson.totalItems).to.eql(3));",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"tc06_id\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"tc06_version\", responseBodyJson.version);",
+									"    pm.collectionVariables.set(\"tc06_snapshot\", JSON.stringify(responseBodyJson));",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC06.3 | Cannot edit Pending",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc06_id}}",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc06_id}}"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"employeeName\": \"Somchai Developer\",\n  \"employeeEmail\": \"{{employeeEmail}}\",\n  \"department\": \"Software Engineering\",\n  \"title\": \"{{tc06_marker}} edited\",\n  \"purpose\": \"Equipment needed for software development work\",\n  \"requiredDate\": \"{{requiredDate}}\",\n  \"additionalNote\": \"Postman requirement fixture; retain for user trials\",\n  \"items\": [\n    {\n      \"equipmentType\": \"NOTEBOOK\",\n      \"quantity\": 1,\n      \"specification\": \"16 GB RAM\"\n    },\n    {\n      \"equipmentType\": \"MONITOR\",\n      \"quantity\": 2,\n      \"specification\": \"27 inch monitor\"\n    }\n  ],\n  \"version\": {{tc06_version}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Unified error contract\", () => {",
+									"    pm.expect(Object.keys(responseBodyJson).sort()).to.eql([\"timestamp\", \"status\", \"code\", \"message\", \"path\", \"fieldErrors\"].sort());",
+									"    pm.expect(responseBodyJson.status).to.eql(pm.response.code);",
+									"    pm.expect(responseBodyJson.message).to.be.a(\"string\").and.not.empty;",
+									"    pm.expect(Number.isNaN(Date.parse(responseBodyJson.timestamp))).to.eql(false);",
+									"    pm.expect(responseBodyJson.path).to.eql(pm.request.url.getPath());",
+									"    pm.expect(responseBodyJson.fieldErrors).to.be.an(\"object\");",
+									"});",
+									"pm.test(\"REQUEST_STATE_CONFLICT\", () => pm.expect(responseBodyJson.code).to.eql(\"REQUEST_STATE_CONFLICT\"));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC06.4 | Verify persisted detail",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc06_id}}",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc06_id}}"
+							]
+						},
+						"description": ""
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Failed action preserved the full aggregate\", () => {",
+									"    pm.expect(responseBodyJson).to.eql(JSON.parse(pm.collectionVariables.get(\"tc06_snapshot\")));",
+									"});"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC07.1 | Missing request returns 404",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{missingId}}",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{missingId}}"
+							]
+						},
+						"description": ""
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.variables.set(\"missingId\", pm.variables.replaceIn(\"{{$guid}}\"));"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Unified error contract\", () => {",
+									"    pm.expect(Object.keys(responseBodyJson).sort()).to.eql([\"timestamp\", \"status\", \"code\", \"message\", \"path\", \"fieldErrors\"].sort());",
+									"    pm.expect(responseBodyJson.status).to.eql(pm.response.code);",
+									"    pm.expect(responseBodyJson.message).to.be.a(\"string\").and.not.empty;",
+									"    pm.expect(Number.isNaN(Date.parse(responseBodyJson.timestamp))).to.eql(false);",
+									"    pm.expect(responseBodyJson.path).to.eql(pm.request.url.getPath());",
+									"    pm.expect(responseBodyJson.fieldErrors).to.be.an(\"object\");",
+									"});",
+									"pm.test(\"REQUEST_NOT_FOUND\", () => pm.expect(responseBodyJson.code).to.eql(\"REQUEST_NOT_FOUND\"));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC08.1 | Create fresh Draft",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "equipment-requests"]
+						},
+						"description": "Setup for this logical case. Creates a new fixture; never uses an existing demo request.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"employeeName\": \"Somchai Developer\",\n  \"employeeEmail\": \"{{employeeEmail}}\",\n  \"department\": \"Software Engineering\",\n  \"title\": \"{{tc08_marker}}\",\n  \"purpose\": \"Equipment needed for software development work\",\n  \"requiredDate\": \"{{requiredDate}}\",\n  \"additionalNote\": \"Postman requirement fixture; retain for user trials\",\n  \"items\": [\n    {\n      \"equipmentType\": \"NOTEBOOK\",\n      \"quantity\": 1,\n      \"specification\": \"16 GB RAM\"\n    },\n    {\n      \"equipmentType\": \"MONITOR\",\n      \"quantity\": 2,\n      \"specification\": \"27 inch monitor\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set(\"tc08_marker\", \"postman_tc08_\" + pm.variables.replaceIn(\"{{$guid}}\"));"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"DRAFT, version 0\", () => {",
+									"    pm.expect(responseBodyJson.status).to.eql(\"DRAFT\");",
+									"    pm.expect(responseBodyJson.version).to.eql(0);",
+									"    pm.expect(responseBodyJson.employeeEmail).to.eql(pm.variables.get(\"employeeEmail\"));",
+									"});",
+									"pm.test(\"totalItems sums quantity\", () => pm.expect(responseBodyJson.totalItems).to.eql(3));",
+									"pm.test(\"Generated identifiers and item details\", () => {",
+									"    const submittedInput = JSON.parse(pm.variables.replaceIn(pm.request.body.raw));",
+									"    Object.keys(submittedInput).filter(key => key !== \"items\").forEach(key => pm.expect(responseBodyJson[key]).to.eql(submittedInput[key]));",
+									"    pm.expect(responseBodyJson.items.map(({equipmentType, quantity, specification}) => ({equipmentType, quantity, specification}))).to.eql(submittedInput.items);",
+									"    pm.expect(responseBodyJson.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);",
+									"    pm.expect(responseBodyJson.requestNumber).to.match(/^REQ-\\d{4}-\\d+$/);",
+									"    pm.expect(responseBodyJson.rejectionReason).to.eql(null);",
+									"    responseBodyJson.items.forEach(item => pm.expect(item.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+									"});",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"tc08_id\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"tc08_version\", responseBodyJson.version);",
+									"    pm.collectionVariables.set(\"tc08_snapshot\", JSON.stringify(responseBodyJson));",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC08.2 | Edit Draft with current version",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc08_id}}",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc08_id}}"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"employeeName\": \"Somchai Developer\",\n  \"employeeEmail\": \"{{employeeEmail}}\",\n  \"department\": \"Software Engineering\",\n  \"title\": \"{{tc08_marker}} edited\",\n  \"purpose\": \"Equipment needed for software development work\",\n  \"requiredDate\": \"{{requiredDate}}\",\n  \"additionalNote\": \"Postman requirement fixture; retain for user trials\",\n  \"items\": [\n    {\n      \"equipmentType\": \"NOTEBOOK\",\n      \"quantity\": 1,\n      \"specification\": \"16 GB RAM\"\n    },\n    {\n      \"equipmentType\": \"MONITOR\",\n      \"quantity\": 2,\n      \"specification\": \"27 inch monitor\"\n    }\n  ],\n  \"version\": {{tc08_version}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"DRAFT, version 1\", () => {",
+									"    pm.expect(responseBodyJson.status).to.eql(\"DRAFT\");",
+									"    pm.expect(responseBodyJson.version).to.eql(1);",
+									"    pm.expect(responseBodyJson.employeeEmail).to.eql(pm.variables.get(\"employeeEmail\"));",
+									"});",
+									"pm.test(\"totalItems sums quantity\", () => pm.expect(responseBodyJson.totalItems).to.eql(3));",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"tc08_id\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"tc08_version\", responseBodyJson.version);",
+									"    pm.collectionVariables.set(\"tc08_snapshot\", JSON.stringify(responseBodyJson));",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC08.3 | Stale edit cannot overwrite",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc08_id}}",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc08_id}}"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"employeeName\": \"Somchai Developer\",\n  \"employeeEmail\": \"{{employeeEmail}}\",\n  \"department\": \"Software Engineering\",\n  \"title\": \"Stale version overwrite attempt\",\n  \"purpose\": \"Equipment needed for software development work\",\n  \"requiredDate\": \"{{requiredDate}}\",\n  \"additionalNote\": \"Postman requirement fixture; retain for user trials\",\n  \"items\": [\n    {\n      \"equipmentType\": \"NOTEBOOK\",\n      \"quantity\": 1,\n      \"specification\": \"16 GB RAM\"\n    },\n    {\n      \"equipmentType\": \"MONITOR\",\n      \"quantity\": 2,\n      \"specification\": \"27 inch monitor\"\n    }\n  ],\n  \"version\": 0\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Unified error contract\", () => {",
+									"    pm.expect(Object.keys(responseBodyJson).sort()).to.eql([\"timestamp\", \"status\", \"code\", \"message\", \"path\", \"fieldErrors\"].sort());",
+									"    pm.expect(responseBodyJson.status).to.eql(pm.response.code);",
+									"    pm.expect(responseBodyJson.message).to.be.a(\"string\").and.not.empty;",
+									"    pm.expect(Number.isNaN(Date.parse(responseBodyJson.timestamp))).to.eql(false);",
+									"    pm.expect(responseBodyJson.path).to.eql(pm.request.url.getPath());",
+									"    pm.expect(responseBodyJson.fieldErrors).to.be.an(\"object\");",
+									"});",
+									"pm.test(\"REQUEST_VERSION_CONFLICT\", () => pm.expect(responseBodyJson.code).to.eql(\"REQUEST_VERSION_CONFLICT\"));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC08.4 | submit",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc08_id}}/submit",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc08_id}}",
+								"submit"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"version\": 0\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Unified error contract\", () => {",
+									"    pm.expect(Object.keys(responseBodyJson).sort()).to.eql([\"timestamp\", \"status\", \"code\", \"message\", \"path\", \"fieldErrors\"].sort());",
+									"    pm.expect(responseBodyJson.status).to.eql(pm.response.code);",
+									"    pm.expect(responseBodyJson.message).to.be.a(\"string\").and.not.empty;",
+									"    pm.expect(Number.isNaN(Date.parse(responseBodyJson.timestamp))).to.eql(false);",
+									"    pm.expect(responseBodyJson.path).to.eql(pm.request.url.getPath());",
+									"    pm.expect(responseBodyJson.fieldErrors).to.be.an(\"object\");",
+									"});",
+									"pm.test(\"REQUEST_VERSION_CONFLICT\", () => pm.expect(responseBodyJson.code).to.eql(\"REQUEST_VERSION_CONFLICT\"));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC08.5 | cancel",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc08_id}}/cancel",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc08_id}}",
+								"cancel"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"version\": 0\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Unified error contract\", () => {",
+									"    pm.expect(Object.keys(responseBodyJson).sort()).to.eql([\"timestamp\", \"status\", \"code\", \"message\", \"path\", \"fieldErrors\"].sort());",
+									"    pm.expect(responseBodyJson.status).to.eql(pm.response.code);",
+									"    pm.expect(responseBodyJson.message).to.be.a(\"string\").and.not.empty;",
+									"    pm.expect(Number.isNaN(Date.parse(responseBodyJson.timestamp))).to.eql(false);",
+									"    pm.expect(responseBodyJson.path).to.eql(pm.request.url.getPath());",
+									"    pm.expect(responseBodyJson.fieldErrors).to.be.an(\"object\");",
+									"});",
+									"pm.test(\"REQUEST_VERSION_CONFLICT\", () => pm.expect(responseBodyJson.code).to.eql(\"REQUEST_VERSION_CONFLICT\"));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC08.6 | Verify persisted detail",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc08_id}}",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc08_id}}"
+							]
+						},
+						"description": ""
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Failed action preserved the full aggregate\", () => {",
+									"    pm.expect(responseBodyJson).to.eql(JSON.parse(pm.collectionVariables.get(\"tc08_snapshot\")));",
+									"});"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC08.7 | submit",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc08_id}}/submit",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc08_id}}",
+								"submit"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"version\": {{tc08_version}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"PENDING, version 2\", () => {",
+									"    pm.expect(responseBodyJson.status).to.eql(\"PENDING\");",
+									"    pm.expect(responseBodyJson.version).to.eql(2);",
+									"    pm.expect(responseBodyJson.employeeEmail).to.eql(pm.variables.get(\"employeeEmail\"));",
+									"});",
+									"pm.test(\"totalItems sums quantity\", () => pm.expect(responseBodyJson.totalItems).to.eql(3));",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"tc08_id\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"tc08_version\", responseBodyJson.version);",
+									"    pm.collectionVariables.set(\"tc08_snapshot\", JSON.stringify(responseBodyJson));",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC08.8 | approve",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "APPROVER"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{approverEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc08_id}}/approve",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc08_id}}",
+								"approve"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"version\": 1\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Unified error contract\", () => {",
+									"    pm.expect(Object.keys(responseBodyJson).sort()).to.eql([\"timestamp\", \"status\", \"code\", \"message\", \"path\", \"fieldErrors\"].sort());",
+									"    pm.expect(responseBodyJson.status).to.eql(pm.response.code);",
+									"    pm.expect(responseBodyJson.message).to.be.a(\"string\").and.not.empty;",
+									"    pm.expect(Number.isNaN(Date.parse(responseBodyJson.timestamp))).to.eql(false);",
+									"    pm.expect(responseBodyJson.path).to.eql(pm.request.url.getPath());",
+									"    pm.expect(responseBodyJson.fieldErrors).to.be.an(\"object\");",
+									"});",
+									"pm.test(\"REQUEST_VERSION_CONFLICT\", () => pm.expect(responseBodyJson.code).to.eql(\"REQUEST_VERSION_CONFLICT\"));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC08.9 | reject",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "APPROVER"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{approverEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc08_id}}/reject",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc08_id}}",
+								"reject"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"version\": 1,\n  \"reason\": \"Stale rejection attempt\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Unified error contract\", () => {",
+									"    pm.expect(Object.keys(responseBodyJson).sort()).to.eql([\"timestamp\", \"status\", \"code\", \"message\", \"path\", \"fieldErrors\"].sort());",
+									"    pm.expect(responseBodyJson.status).to.eql(pm.response.code);",
+									"    pm.expect(responseBodyJson.message).to.be.a(\"string\").and.not.empty;",
+									"    pm.expect(Number.isNaN(Date.parse(responseBodyJson.timestamp))).to.eql(false);",
+									"    pm.expect(responseBodyJson.path).to.eql(pm.request.url.getPath());",
+									"    pm.expect(responseBodyJson.fieldErrors).to.be.an(\"object\");",
+									"});",
+									"pm.test(\"REQUEST_VERSION_CONFLICT\", () => pm.expect(responseBodyJson.code).to.eql(\"REQUEST_VERSION_CONFLICT\"));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC08.10 | Verify persisted detail",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc08_id}}",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc08_id}}"
+							]
+						},
+						"description": ""
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Failed action preserved the full aggregate\", () => {",
+									"    pm.expect(responseBodyJson).to.eql(JSON.parse(pm.collectionVariables.get(\"tc08_snapshot\")));",
+									"});"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC08.11 | cancel",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc08_id}}/cancel",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc08_id}}",
+								"cancel"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"version\": {{tc08_version}}\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"CANCELLED, version 3\", () => {",
+									"    pm.expect(responseBodyJson.status).to.eql(\"CANCELLED\");",
+									"    pm.expect(responseBodyJson.version).to.eql(3);",
+									"    pm.expect(responseBodyJson.employeeEmail).to.eql(pm.variables.get(\"employeeEmail\"));",
+									"});",
+									"pm.test(\"totalItems sums quantity\", () => pm.expect(responseBodyJson.totalItems).to.eql(3));",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"tc08_id\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"tc08_version\", responseBodyJson.version);",
+									"    pm.collectionVariables.set(\"tc08_snapshot\", JSON.stringify(responseBodyJson));",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC08.12 | Verify persisted detail",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc08_id}}",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc08_id}}"
+							]
+						},
+						"description": ""
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Failed action preserved the full aggregate\", () => {",
+									"    pm.expect(responseBodyJson).to.eql(JSON.parse(pm.collectionVariables.get(\"tc08_snapshot\")));",
+									"});"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC09.1 | Create fresh Draft",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "equipment-requests"]
+						},
+						"description": "Setup for this logical case. Creates a new fixture; never uses an existing demo request.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"employeeName\": \"Somchai Developer\",\n  \"employeeEmail\": \"{{employeeEmail}}\",\n  \"department\": \"Software Engineering\",\n  \"title\": \"{{tc09_marker}} %_! Draft A\",\n  \"purpose\": \"Equipment needed for software development work\",\n  \"requiredDate\": \"{{requiredDate}}\",\n  \"additionalNote\": \"Postman requirement fixture; retain for user trials\",\n  \"items\": [\n    {\n      \"equipmentType\": \"NOTEBOOK\",\n      \"quantity\": 1,\n      \"specification\": \"16 GB RAM\"\n    },\n    {\n      \"equipmentType\": \"MONITOR\",\n      \"quantity\": 2,\n      \"specification\": \"27 inch monitor\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.collectionVariables.set(\"tc09_marker\", \"postman_tc09_\" + pm.variables.replaceIn(\"{{$guid}}\"));"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"DRAFT, version 0\", () => {",
+									"    pm.expect(responseBodyJson.status).to.eql(\"DRAFT\");",
+									"    pm.expect(responseBodyJson.version).to.eql(0);",
+									"    pm.expect(responseBodyJson.employeeEmail).to.eql(pm.variables.get(\"employeeEmail\"));",
+									"});",
+									"pm.test(\"totalItems sums quantity\", () => pm.expect(responseBodyJson.totalItems).to.eql(3));",
+									"pm.test(\"Generated identifiers and item details\", () => {",
+									"    const submittedInput = JSON.parse(pm.variables.replaceIn(pm.request.body.raw));",
+									"    Object.keys(submittedInput).filter(key => key !== \"items\").forEach(key => pm.expect(responseBodyJson[key]).to.eql(submittedInput[key]));",
+									"    pm.expect(responseBodyJson.items.map(({equipmentType, quantity, specification}) => ({equipmentType, quantity, specification}))).to.eql(submittedInput.items);",
+									"    pm.expect(responseBodyJson.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);",
+									"    pm.expect(responseBodyJson.requestNumber).to.match(/^REQ-\\d{4}-\\d+$/);",
+									"    pm.expect(responseBodyJson.rejectionReason).to.eql(null);",
+									"    responseBodyJson.items.forEach(item => pm.expect(item.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));",
+									"});",
+									"if (pm.response.code < 300) {",
+									"    pm.collectionVariables.set(\"tc09_id\", responseBodyJson.id);",
+									"    pm.collectionVariables.set(\"tc09_version\", responseBodyJson.version);",
+									"    pm.collectionVariables.set(\"tc09_snapshot\", JSON.stringify(responseBodyJson));",
+									"}"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC09.2 | Create search fixture tc09_pending",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "equipment-requests"]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"employeeName\": \"Somchai Developer\",\n  \"employeeEmail\": \"{{employeeEmail}}\",\n  \"department\": \"Software Engineering\",\n  \"title\": \"{{tc09_marker}} %_! Pending A\",\n  \"purpose\": \"Equipment needed for software development work\",\n  \"requiredDate\": \"{{requiredDate}}\",\n  \"additionalNote\": \"Postman requirement fixture; retain for user trials\",\n  \"items\": [\n    {\n      \"equipmentType\": \"NOTEBOOK\",\n      \"quantity\": 1,\n      \"specification\": \"16 GB RAM\"\n    },\n    {\n      \"equipmentType\": \"MONITOR\",\n      \"quantity\": 2,\n      \"specification\": \"27 inch monitor\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+									"const responseBodyJson = pm.response.json();",
+									"if (pm.response.code === 201) { pm.collectionVariables.set(\"tc09_pending_id\", responseBodyJson.id); pm.collectionVariables.set(\"tc09_pending_version\", responseBodyJson.version); }"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC09.3 | Submit search fixture",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc09_pending_id}}/submit",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc09_pending_id}}",
+								"submit"
+							]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"version\": 0\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"PENDING\", () => pm.expect(responseBodyJson.status).to.eql(\"PENDING\"));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC09.4 | Create search fixture tc09_other",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{otherEmployeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "equipment-requests"]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"employeeName\": \"Suda Analyst\",\n  \"employeeEmail\": \"{{otherEmployeeEmail}}\",\n  \"department\": \"Software Engineering\",\n  \"title\": \"{{tc09_marker}} %_! Draft B\",\n  \"purpose\": \"Equipment needed for software development work\",\n  \"requiredDate\": \"{{requiredDate}}\",\n  \"additionalNote\": \"Postman requirement fixture; retain for user trials\",\n  \"items\": [\n    {\n      \"equipmentType\": \"NOTEBOOK\",\n      \"quantity\": 1,\n      \"specification\": \"16 GB RAM\"\n    },\n    {\n      \"equipmentType\": \"MONITOR\",\n      \"quantity\": 2,\n      \"specification\": \"27 inch monitor\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+									"const responseBodyJson = pm.response.json();",
+									"if (pm.response.code === 201) { pm.collectionVariables.set(\"tc09_other_id\", responseBodyJson.id); pm.collectionVariables.set(\"tc09_other_version\", responseBodyJson.version); }"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC09.5 | Create search fixture tc09_decoy",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "equipment-requests"]
+						},
+						"description": "",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"employeeName\": \"Somchai Developer\",\n  \"employeeEmail\": \"{{employeeEmail}}\",\n  \"department\": \"Software Engineering\",\n  \"title\": \"{{tc09_marker}} XYZ Draft decoy\",\n  \"purpose\": \"Equipment needed for software development work\",\n  \"requiredDate\": \"{{requiredDate}}\",\n  \"additionalNote\": \"Postman requirement fixture; retain for user trials\",\n  \"items\": [\n    {\n      \"equipmentType\": \"NOTEBOOK\",\n      \"quantity\": 1,\n      \"specification\": \"16 GB RAM\"\n    },\n    {\n      \"equipmentType\": \"MONITOR\",\n      \"quantity\": 2,\n      \"specification\": \"27 inch monitor\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+									"const responseBodyJson = pm.response.json();",
+									"if (pm.response.code === 201) { pm.collectionVariables.set(\"tc09_decoy_id\", responseBodyJson.id); pm.collectionVariables.set(\"tc09_decoy_version\", responseBodyJson.version); }"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC09.6 | Keyword AND status AND department + Employee owner scope",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests?keyword={{tc09_marker}}%20%25_!&status=DRAFT&department=Software Engineering&page=0&size=10&sort=createdAt,asc",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "equipment-requests"],
+							"query": [
+								{
+									"key": "keyword",
+									"value": "{{tc09_marker}}%20%25_!"
+								},
+								{
+									"key": "status",
+									"value": "DRAFT"
+								},
+								{
+									"key": "department",
+									"value": "Software Engineering"
+								},
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								},
+								{
+									"key": "sort",
+									"value": "createdAt,asc"
+								}
+							]
+						},
+						"description": "Keyword is URL-encoded: %20 is space and %25 is a literal percent sign. Backend searches the decoded %_! substring, not SQL wildcards."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Page contract\", () => {",
+									"    pm.expect(Object.keys(responseBodyJson).sort()).to.eql([\"content\",\"page\",\"size\",\"totalElements\",\"totalPages\"].sort());",
+									"    pm.expect(responseBodyJson.page).to.eql(0);",
+									"    pm.expect(responseBodyJson.size).to.eql(10);",
+									"});",
+									"pm.test(\"Only owner A Draft matches, literal %/_/!\", () => {",
+									"    pm.expect(responseBodyJson.totalElements).to.eql(1);",
+									"    pm.expect(responseBodyJson.totalPages).to.eql(1);",
+									"    pm.expect(responseBodyJson.content.map(x => x.id)).to.eql([pm.collectionVariables.get(\"tc09_id\")]);",
+									"    pm.expect(responseBodyJson.content[0].totalItems).to.eql(3);",
+									"});"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC09.7 | Approver sees both matching owners",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "APPROVER"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{approverEmail}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests?keyword={{tc09_marker}}%20%25_!&status=DRAFT&department=Software Engineering&page=0&size=10&sort=createdAt,asc",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "equipment-requests"],
+							"query": [
+								{
+									"key": "keyword",
+									"value": "{{tc09_marker}}%20%25_!"
+								},
+								{
+									"key": "status",
+									"value": "DRAFT"
+								},
+								{
+									"key": "department",
+									"value": "Software Engineering"
+								},
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								},
+								{
+									"key": "sort",
+									"value": "createdAt,asc"
+								}
+							]
+						},
+						"description": "Keyword is URL-encoded: %20 is space and %25 is a literal percent sign. Backend searches the decoded %_! substring, not SQL wildcards."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Page contract\", () => {",
+									"    pm.expect(Object.keys(responseBodyJson).sort()).to.eql([\"content\",\"page\",\"size\",\"totalElements\",\"totalPages\"].sort());",
+									"    pm.expect(responseBodyJson.page).to.eql(0);",
+									"    pm.expect(responseBodyJson.size).to.eql(10);",
+									"});",
+									"pm.test(\"Approver owner scope\", () => {",
+									"    pm.expect(responseBodyJson.totalElements).to.eql(2);",
+									"    pm.expect(responseBodyJson.content.map(x => x.id).sort()).to.eql([pm.collectionVariables.get(\"tc09_id\"), pm.collectionVariables.get(\"tc09_other_id\")].sort());",
+									"});"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC09.8 | Other Employee cannot read owner A detail",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{otherEmployeeEmail}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests/{{tc09_id}}",
+							"host": ["{{baseUrl}}"],
+							"path": [
+								"api",
+								"v1",
+								"equipment-requests",
+								"{{tc09_id}}"
+							]
+						},
+						"description": ""
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Unified error contract\", () => {",
+									"    pm.expect(Object.keys(responseBodyJson).sort()).to.eql([\"timestamp\", \"status\", \"code\", \"message\", \"path\", \"fieldErrors\"].sort());",
+									"    pm.expect(responseBodyJson.status).to.eql(pm.response.code);",
+									"    pm.expect(responseBodyJson.message).to.be.a(\"string\").and.not.empty;",
+									"    pm.expect(Number.isNaN(Date.parse(responseBodyJson.timestamp))).to.eql(false);",
+									"    pm.expect(responseBodyJson.path).to.eql(pm.request.url.getPath());",
+									"    pm.expect(responseBodyJson.fieldErrors).to.be.an(\"object\");",
+									"});",
+									"pm.test(\"FORBIDDEN\", () => pm.expect(responseBodyJson.code).to.eql(\"FORBIDDEN\"));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC09.9 | Reject invalid page size",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests?size=101",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "equipment-requests"],
+							"query": [
+								{
+									"key": "size",
+									"value": "101"
+								}
+							]
+						},
+						"description": ""
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Unified error contract\", () => {",
+									"    pm.expect(Object.keys(responseBodyJson).sort()).to.eql([\"timestamp\", \"status\", \"code\", \"message\", \"path\", \"fieldErrors\"].sort());",
+									"    pm.expect(responseBodyJson.status).to.eql(pm.response.code);",
+									"    pm.expect(responseBodyJson.message).to.be.a(\"string\").and.not.empty;",
+									"    pm.expect(Number.isNaN(Date.parse(responseBodyJson.timestamp))).to.eql(false);",
+									"    pm.expect(responseBodyJson.path).to.eql(pm.request.url.getPath());",
+									"    pm.expect(responseBodyJson.fieldErrors).to.be.an(\"object\");",
+									"});",
+									"pm.test(\"VALIDATION_ERROR\", () => pm.expect(responseBodyJson.code).to.eql(\"VALIDATION_ERROR\"));"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC10.1 | Item insert failure rolls back Request + Items",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "equipment-requests"]
+						},
+						"description": "Requires temporary marker-specific DB fixture from rollback_fixture.py. HTTP 500 alone is insufficient; run verify afterward for witness + fresh-connection parent/item counts and cleanup.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"employeeName\": \"Somchai Developer\",\n  \"employeeEmail\": \"{{employeeEmail}}\",\n  \"department\": \"Software Engineering\",\n  \"title\": \"{{rollback_marker}}\",\n  \"purpose\": \"Equipment needed for software development work\",\n  \"requiredDate\": \"{{requiredDate}}\",\n  \"additionalNote\": \"Postman requirement fixture; retain for user trials\",\n  \"items\": [\n    {\n      \"equipmentType\": \"MONITOR\",\n      \"quantity\": 2,\n      \"specification\": \"{{rollback_marker}}_first\"\n    },\n    {\n      \"equipmentType\": \"NOTEBOOK\",\n      \"quantity\": 1,\n      \"specification\": \"{{rollback_marker}}\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const marker = pm.variables.get(\"rollback_marker\");",
+									"if (!/^postman_rb_[0-9a-f]{32}$/.test(marker || \"\")) {",
+									"    throw new Error(\"TC10 requires rollback fixture: python3 tests/postman/rollback_fixture.py prepare; import its environment. See tests/postman/README.md.\");",
+									"}"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 500\", () => pm.response.to.have.status(500));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"Unified error contract\", () => {",
+									"    pm.expect(Object.keys(responseBodyJson).sort()).to.eql([\"timestamp\", \"status\", \"code\", \"message\", \"path\", \"fieldErrors\"].sort());",
+									"    pm.expect(responseBodyJson.status).to.eql(pm.response.code);",
+									"    pm.expect(responseBodyJson.message).to.be.a(\"string\").and.not.empty;",
+									"    pm.expect(Number.isNaN(Date.parse(responseBodyJson.timestamp))).to.eql(false);",
+									"    pm.expect(responseBodyJson.path).to.eql(pm.request.url.getPath());",
+									"    pm.expect(responseBodyJson.fieldErrors).to.be.an(\"object\");",
+									"});",
+									"pm.test(\"INTERNAL_ERROR\", () => pm.expect(responseBodyJson.code).to.eql(\"INTERNAL_ERROR\"));",
+									"pm.test(\"Generic internal error hides DB details\", () => {",
+									"    pm.expect(responseBodyJson.message).to.eql(\"An unexpected error occurred\");",
+									"    pm.expect(responseBodyJson.fieldErrors).to.eql({});",
+									"    pm.expect(pm.response.text()).not.to.include(pm.variables.get(\"rollback_marker\"));",
+									"});"
+								]
+							}
+						}
+					],
+					"response": []
+				},
+				{
+					"name": "TC10.2 | Rolled-back request absent from API",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "EMPLOYEE"
+							},
+							{
+								"key": "X-User-Email",
+								"value": "{{employeeEmail}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/equipment-requests?keyword={{rollback_marker}}&page=0&size=10",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "equipment-requests"],
+							"query": [
+								{
+									"key": "keyword",
+									"value": "{{rollback_marker}}"
+								},
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								}
+							]
+						},
+						"description": ""
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const marker = pm.variables.get(\"rollback_marker\");",
+									"if (!/^postman_rb_[0-9a-f]{32}$/.test(marker || \"\")) {",
+									"    throw new Error(\"TC10 requires rollback fixture: python3 tests/postman/rollback_fixture.py prepare; import its environment. See tests/postman/README.md.\");",
+									"}"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+									"const responseBodyJson = pm.response.json();",
+									"pm.test(\"No partial request visible\", () => { pm.expect(responseBodyJson.content).to.eql([]); pm.expect(responseBodyJson.totalElements).to.eql(0); pm.expect(responseBodyJson.totalPages).to.eql(0); });"
+								]
+							}
+						}
+					],
+					"response": []
+				}
+			]
+		}
+	]
+}

@@ -1,0 +1,13 @@
+**/node_modules/
+**/.next/
+**/coverage/
+**/target/
+**/*.tsbuildinfo
+**/package-lock.json
+frontend/next-env.d.ts
+docs/**/*.log
+**/AGENTS.md
+.agents/
+.codex/
+.aws/
+tests/performance/results/*.html

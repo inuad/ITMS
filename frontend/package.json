@@ -1,0 +1,32 @@
+{
+	"name": "itms-frontend",
+	"version": "0.1.0",
+	"private": true,
+	"engines": {
+		"node": "22.x"
+	},
+	"scripts": {
+		"dev": "next dev --hostname 0.0.0.0",
+		"build": "next build",
+		"start": "next start --hostname 0.0.0.0",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run --reporter=verbose"
+	},
+	"dependencies": {
+		"@hookform/resolvers": "5.9.1",
+		"next": "16.3.7",
+		"react": "19.3.0",
+		"react-dom": "19.3.0",
+		"react-hook-form": "7.89.0",
+		"zod": "4.6.5"
+	},
+	"devDependencies": {
+		"@testing-library/react": "16.3.0",
+		"@types/node": "22.15.30",
+		"@types/react": "19.2.14",
+		"@types/react-dom": "19.2.3",
+		"jsdom": "26.1.0",
+		"typescript": "5.9.3",
+		"vitest": "4.1.11"
+	}
+}
